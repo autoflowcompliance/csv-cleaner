@@ -96,16 +96,30 @@
     return [null, "unrecognised date format; left as found"];
   }
 
+  /* Title lines above the real header (rows with at most one filled cell, while at least two rows below are wider) are not data. */
+  function splitPreamble(rows) {
+    var w = rows.slice(0, 40).map(function (r) { return r.filter(function (c) { return tidy(c) !== ""; }).length; }), k = 0, wide = 0, j;
+    while (k < w.length && w[k] <= 1) k++;
+    for (j = k; j < w.length; j++) if (w[j] >= 2) wide++;
+    if (k === 0 || k >= w.length || wide < 2) return { rows: rows, pre: [] };
+    return { rows: rows.slice(k), pre: rows.slice(0, k) };
+  }
+
   /* opts: {region: AU|NZ|UK|US|CA|"", dateOrder: dmy|mdy|ymd|"", key: header name or ""} */
   function clean(rows, opts) {
     opts = opts || {};
     if (!rows.length) throw new Error("empty file");
+    var sp = splitPreamble(rows), pre = sp.pre; rows = sp.rows;
     var header = rows[0].map(tidy), n = header.length, pcols = [], dcols = [], ecols = [];
     header.forEach(function (h, i) { if (PHONE_COL.test(h)) pcols.push(i); if (DATE_COL.test(h)) dcols.push(i); if (EMAIL_COL.test(h)) ecols.push(i); });
     var kcol = opts.key && header.indexOf(opts.key) >= 0 ? header.indexOf(opts.key) : (ecols.length ? ecols[0] : null);
     var changes = [], issues = [], out = [], seen = Object.create(null), bykey = Object.create(null);
+    pre.forEach(function (pr, pi) { /* skipped title lines are listed, never dropped silently */
+      var vals = pr.map(tidy).filter(Boolean);
+      if (vals.length) issues.push([pi + 1, "*", "preamble_row_skipped: above the header, not cleaned", vals.join(" | ")]);
+    });
     for (var r = 1; r < rows.length; r++) {
-      var rn = r + 1, extra = rows[r].slice(n).map(tidy).filter(Boolean); /* cells past the header width: never dropped silently */
+      var rn = r + 1 + pre.length, extra = rows[r].slice(n).map(tidy).filter(Boolean); /* cells past the header width: never dropped silently */
       if (extra.length) issues.push([rn, "*", "row_longer_than_header: " + extra.length + " extra cell(s) not in clean.csv", extra.join(" | ")]);
       var row = rows[r].slice(0, n); while (row.length < n) row.push("");
       var cells = [];
