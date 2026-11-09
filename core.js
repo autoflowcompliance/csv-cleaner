@@ -10,7 +10,7 @@
   var EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
   var SCI_RE = /^[+-]?\d(?:\.\d+)?[eE]\+(?:1\d|[2-9]\d)$/; /* Excel shows long numbers like this and keeps only ~15 digits */
   var MONTHS = {}; "jan feb mar apr may jun jul aug sep oct nov dec".split(" ").forEach(function (m, i) { MONTHS[m] = i + 1; });
-  var PHONE_COL = /phone|mobile|\btel|cell|fax/i, DATE_COL = /date|created|\bdue\b|issued|updated|birth|dob/i, EMAIL_COL = /e-?mail/i;
+  var PHONE_COL = /phone|mobile|\btel|cell|fax/i, DATE_COL = /date|created|\bdue\b|issued|updated|birth|dob|timestamp|(?:^|[^a-z])time(?:$|[^a-z])|modified|changed|booked|booking|appointment|joined|sign[ _-]?up|expir|renew|opened|closed|placed|scheduled|published|shipped|delivered/i, EMAIL_COL = /e-?mail/i;
 
   function tidy(v) { return v.replace(/[\s ]+/g, " ").trim(); }
 
