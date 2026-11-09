@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSV Cleaner: runs in your browser</title>
+<link rel="icon" href="data:,">
+<meta name="description" content="Clean a messy contact or customer CSV in your browser: trim spaces, fix emails, phones and dates, remove duplicates, and get a log of every change. Your file is never uploaded.">
+<style>
+  :root { --bg:#fbfbf9; --fg:#1d1d1b; --muted:#5d5d58; --line:#d9d9d2; --card:#fff; --accent:#1f5f4a; --warn:#8a4b00; --warnbg:#fff4e2; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161715; --fg:#ecece6; --muted:#a4a49b; --line:#33342f; --card:#1e1f1c; --accent:#6fcfae; --warn:#f0b86a; --warnbg:#2b2417; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:24px 16px 56px; }
+  h1 { font-size:1.6rem; margin:0 0 6px; } h2 { font-size:1.1rem; margin:28px 0 8px; }
+  p { margin:8px 0; } .muted { color:var(--muted); font-size:.92rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin:14px 0; }
+  .drop { border:2px dashed var(--line); border-radius:10px; padding:26px 16px; text-align:center; cursor:pointer; }
+  .drop.on { border-color:var(--accent); }
+  .row { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0 0; }
+  label { display:flex; flex-direction:column; gap:4px; font-size:.9rem; color:var(--muted); min-width:150px; flex:1; }
+  select, input[type=text] { font:inherit; padding:8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); }
+  button, .btn { font:inherit; padding:9px 14px; border-radius:6px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; text-decoration:none; display:inline-block; }
+  @media (prefers-color-scheme: dark) { button, .btn { color:#0b1f17; } }
+  button.alt { background:transparent; color:var(--accent); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .notice { background:var(--warnbg); color:var(--warn); border-radius:8px; padding:10px 12px; margin:10px 0; font-size:.95rem; }
+  .stats { display:flex; flex-wrap:wrap; gap:10px; margin:10px 0; }
+  .stat { border:1px solid var(--line); border-radius:8px; padding:8px 12px; min-width:110px; } .stat b { display:block; font-size:1.3rem; }
+  table { border-collapse:collapse; width:100%; font-size:.85rem; } th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); vertical-align:top; word-break:break-word; }
+  .scroll { overflow-x:auto; } ul { padding-left:20px; margin:8px 0; } li { margin:4px 0; }
+  .hidden { display:none; } footer { margin-top:36px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>CSV Cleaner</h1>
+  <p>Drop in a messy contact or customer CSV. Get back a clean file and a line-by-line log of every change. <strong>Your file is read by your browser and is never uploaded</strong>: this page loads one script and makes no network requests of its own.</p>
+
+  <div class="card">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a CSV file">
+      <strong>Drop a .csv file here</strong><br><span class="muted">or click to choose one (comma, semicolon, tab or pipe separated; UTF-8 or Windows-1252)</span>
+      <input type="file" id="file" accept=".csv,text/csv,.txt" class="hidden">
+    </div>
+    <div class="row">
+      <label>Country for local phone numbers
+        <select id="region"><option value="">Not given (leave local numbers as found)</option><option>AU</option><option>NZ</option><option>UK</option><option>US</option><option>CA</option></select>
+      </label>
+      <label>Date order in your file
+        <select id="order"><option value="">Not given (leave ambiguous dates as found)</option><option value="dmy">Day / month / year</option><option value="mdy">Month / day / year</option></select>
+      </label>
+      <label>Column that identifies a person (optional)
+        <input type="text" id="key" placeholder="default: first email column">
+      </label>
+    </div>
+    <p class="muted" id="status">No file chosen.</p>
+  </div>
+
+  <div id="result" class="hidden">
+    <h2>Result</h2>
+    <div class="notice hidden" id="capnote"></div>
+    <div class="stats" id="stats"></div>
+    <p>
+      <button id="dl-clean">Download clean.csv</button>
+      <button class="alt" id="dl-changes">changes.csv (every edit)</button>
+      <button class="alt" id="dl-issues">issues.csv (you decide)</button>
+      <button class="alt" id="dl-free">first 20 rows</button>
+    </p>
+    <h2>Things this tool left for you to decide</h2>
+    <div class="scroll" id="issues"></div>
+    <h2>First changes it made</h2>
+    <div class="scroll" id="changes"></div>
+  </div>
+
+  <h2>What it does, and only this</h2>
+  <ul>
+    <li>Trims spaces (including non-breaking spaces and line breaks inside a cell).</li>
+    <li>Lower-cases emails and lists any that are not shaped like name@domain.tld.</li>
+    <li>Writes phones as +country number when the number is international already, or when you chose a country. Anything else is listed, not guessed.</li>
+    <li>Writes dates as yyyy-mm-dd when the order is clear. A value like 03/04/2024 could be 3 April or 4 March, so it is left as found unless you choose the date order.</li>
+    <li>Removes empty rows and exact duplicate rows (first one kept). Rows that share an email but differ elsewhere are <em>listed, never merged</em>: which one wins is your decision.</li>
+  </ul>
+  <h2>What it does not do</h2>
+  <ul>
+    <li>It reads CSV only (export Excel files as CSV first). A number Excel has already turned into 4.05E+14 cannot be restored, and the tool does not detect it yet; check long ID or barcode columns by eye.</li>
+    <li>It does not import into Xero, QuickBooks, HubSpot or anything else, and it does not know your business rules.</li>
+    <li>It was tested against synthetic files only (see the test folder in the repository), not against anyone's real data. Check the log before you rely on a file.</li>
+  </ul>
+
+  <div class="card" id="paid">
+    <strong id="paid-title"></strong>
+    <p class="muted" id="paid-text"></p>
+    <div id="paid-actions"></div>
+  </div>
+
+  <footer class="muted">
+    <p>Built by Neo Dlamini (South Africa, UTC+2), github.com/autoflowcompliance. Written with AI assistance (Claude Code). The cleaning rules are the same as the Python tool in the same repository, and a test confirms the two give identical output on five test runs.</p>
+  </footer>
+</main>
+
+<script src="core.js"></script>
+<script>
+(function () {
+  "use strict";
+  /* ---- Owner settings. Leave PAY_URL and KEY_SHA256 empty until the payment link exists. ---- */
+  var CONFIG = {
+    FREE_ROWS: 500,                       // rows cleaned without a key
+    PAY_URL: "",                          // a payment link Neo creates in his own PayPal or Stripe account
+    KEY_SHA256: "",                       // SHA-256 (hex) of the licence key Neo sets as the link's after-payment key
+    CONTACT: "mphodlamini73@gmail.com",
+    PRICE_TEXT: "US$19"
+  };
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { text: null, name: "", result: null, unlocked: false };
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function sha256Hex(str) {
+    var enc = new TextEncoder().encode(str);
+    return crypto.subtle.digest("SHA-256", enc).then(function (b) { return Array.prototype.map.call(new Uint8Array(b), function (x) { return x.toString(16).padStart(2, "0"); }).join(""); });
+  }
+  function checkKey(k) {
+    if (!CONFIG.KEY_SHA256 || !k || !window.crypto || !crypto.subtle) return Promise.resolve(false);
+    return sha256Hex(k.trim()).then(function (h) { return h === CONFIG.KEY_SHA256; });
+  }
+  function download(name, text) {
+    var blob = new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }), a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+  function table(head, rows, max) {
+    if (!rows.length) return "<p class='muted'>None.</p>";
+    var h = "<table><thead><tr>" + head.map(function (x) { return "<th>" + esc(x) + "</th>"; }).join("") + "</tr></thead><tbody>";
+    rows.slice(0, max).forEach(function (r) { h += "<tr>" + r.map(function (c) { return "<td>" + esc(c) + "</td>"; }).join("") + "</tr>"; });
+    return h + "</tbody></table>" + (rows.length > max ? "<p class='muted'>Showing " + max + " of " + rows.length + ". The downloads have all of them.</p>" : "");
+  }
+  function decode(buf) {
+    try { return new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch (e) { return new TextDecoder("windows-1252").decode(buf); }
+  }
+
+  function run() {
+    if (state.text == null) return;
+    var rows;
+    try { rows = CSVCleaner.parseCSV(state.text); } catch (e) { $("status").textContent = "Could not read that file: " + e.message; return; }
+    if (!rows.length) { $("status").textContent = "That file is empty."; return; }
+    var total = rows.length - 1, capped = false;
+    if (!state.unlocked && total > CONFIG.FREE_ROWS) { rows = rows.slice(0, CONFIG.FREE_ROWS + 1); capped = true; }
+    var res;
+    try { res = CSVCleaner.clean(rows, { region: $("region").value, dateOrder: $("order").value, key: $("key").value.trim() }); }
+    catch (e) { $("status").textContent = "Could not clean that file: " + e.message; return; }
+    state.result = res;
+    $("status").textContent = state.name + ": " + total + " data rows, " + res.header.length + " columns.";
+    $("result").classList.remove("hidden");
+    var cap = $("capnote");
+    if (capped) { cap.classList.remove("hidden"); cap.textContent = "This file has " + total + " rows. The free limit is " + CONFIG.FREE_ROWS + ", so only the first " + CONFIG.FREE_ROWS + " rows were cleaned and are in the downloads. See the box at the bottom for larger files."; }
+    else cap.classList.add("hidden");
+    var counts = {}; res.changes.forEach(function (c) { var k = c[2].split(" ")[0]; counts[k] = (counts[k] || 0) + 1; });
+    $("stats").innerHTML = [["Rows in", res.inRows], ["Rows out", res.outRows], ["Edits", res.changes.length], ["To decide", res.issues.length]].map(function (s) { return "<div class='stat'><b>" + s[1] + "</b>" + s[0] + "</div>"; }).join("");
+    $("issues").innerHTML = table(["Row", "Column", "Issue", "Value"], res.issues, 15);
+    $("changes").innerHTML = table(["Row", "Column", "Action", "Old", "New"], res.changes, 15);
+  }
+
+  function load(file) {
+    if (!file) return;
+    state.name = file.name;
+    var fr = new FileReader();
+    fr.onload = function () { state.text = decode(fr.result); run(); };
+    fr.onerror = function () { $("status").textContent = "Could not read that file."; };
+    fr.readAsArrayBuffer(file);
+  }
+  var drop = $("drop"), input = $("file");
+  drop.addEventListener("click", function () { input.click(); });
+  drop.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } });
+  input.addEventListener("change", function () { load(input.files[0]); });
+  ["dragenter", "dragover"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("on"); }); });
+  ["dragleave", "drop"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("on"); }); });
+  drop.addEventListener("drop", function (e) { load(e.dataTransfer.files[0]); });
+  ["region", "order", "key"].forEach(function (id) { $(id).addEventListener("change", run); });
+  $("dl-clean").addEventListener("click", function () { if (state.result) download("clean.csv", CSVCleaner.toCSV(state.result.header, state.result.clean)); });
+  $("dl-changes").addEventListener("click", function () { if (state.result) download("changes.csv", CSVCleaner.toCSV(["source_row", "column", "action", "old", "new"], state.result.changes)); });
+  $("dl-issues").addEventListener("click", function () { if (state.result) download("issues.csv", CSVCleaner.toCSV(["source_row", "column", "issue", "value"], state.result.issues)); });
+  $("dl-free").addEventListener("click", function () { if (state.result) download("free_sample_20.csv", CSVCleaner.toCSV(state.result.header, state.result.free20)); });
+
+  /* Paid box: shows what is actually available. Nothing here claims a payment option that is not configured. */
+  function paidBox() {
+    var t = $("paid-title"), p = $("paid-text"), a = $("paid-actions");
+    if (CONFIG.PAY_URL && CONFIG.KEY_SHA256) {
+      t.textContent = "Files over " + CONFIG.FREE_ROWS + " rows: " + CONFIG.PRICE_TEXT + " licence";
+      p.textContent = "Buy a licence key, enter it here, and the row limit is lifted in this browser. The key is checked in your browser, so this is an honour system.";
+      a.innerHTML = "<a class='btn' href='" + esc(CONFIG.PAY_URL) + "' rel='noopener'>Buy a licence (" + esc(CONFIG.PRICE_TEXT) + ")</a> <input type='text' id='keyin' placeholder='Licence key' style='margin-left:8px'> <button class='alt' id='keybtn'>Unlock</button> <span class='muted' id='keymsg'></span>";
+      $("keybtn").addEventListener("click", function () { checkKey($("keyin").value).then(function (ok) { state.unlocked = ok; $("keymsg").textContent = ok ? "Unlocked for this page." : "That key did not match."; if (ok) run(); }); });
+    } else {
+      t.textContent = "Bigger file, or want it done for you?";
+      p.textContent = "Email " + CONFIG.CONTACT + " with a sample (personal data removed is fine). Up to 5,000 rows is US$60, and the first 20 rows are cleaned free so you can judge the quality before paying. A paid licence for this page is not open yet.";
+      a.innerHTML = "<a class='btn' href='mailto:" + esc(CONFIG.CONTACT) + "?subject=CSV%20cleanup'>Email a sample</a>";
+    }
+  }
+  paidBox();
+  if (location.hash.indexOf("key=") >= 0) checkKey(decodeURIComponent(location.hash.split("key=")[1] || "")).then(function (ok) { state.unlocked = ok; });
+})();
+</script>
+</body>
+</html>
