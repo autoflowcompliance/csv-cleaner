@@ -82,7 +82,7 @@
   </ul>
   <h2>What it does not do</h2>
   <ul>
-    <li>It reads CSV only (export Excel files as CSV first). A number Excel has already turned into 4.05E+14 cannot be restored, and the tool does not detect it yet; check long ID or barcode columns by eye.</li>
+    <li>It reads CSV only (export Excel files as CSV first). A number Excel has already turned into 4.05E+14 cannot be restored. The tool leaves such a cell as found and lists it in issues.csv (scientific_notation) when the exponent is 10 or more, so ask for that column exported as text; shorter forms like 2E+3 are not listed.</li>
     <li>It does not import into Xero, QuickBooks, HubSpot or anything else, and it does not know your business rules.</li>
     <li>It was tested against synthetic files only (see the test folder in the repository), not against anyone's real data. Check the log before you rely on a file.</li>
   </ul>
