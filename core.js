@@ -93,6 +93,14 @@
     if ((m = /^([A-Za-z]{3,9})\.? (\d{1,2}),? (\d{4})$/.exec(v)) && MONTHS[m[1].slice(0, 3).toLowerCase()]) {
       return make(+m[3], MONTHS[m[1].slice(0, 3).toLowerCase()], +m[2]);
     }
+    if ((m = /^(\S+)[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?$/.exec(v)) && /^\d{1,2}[\/.\-]\d{1,2}[\/.\-](\d{2}|\d{4})$/.test(m[1])) { /* dd/mm/yyyy with a time: the date part follows the same rules */
+      var dp = normDate(m[1], order);
+      if (dp[0] === null) return dp;
+      var hh = +m[2], mi = +m[3], se = m[4], ap = (m[5] || "").toLowerCase();
+      if (mi > 59 || (se && +se > 59) || (ap && !(hh >= 1 && hh <= 12)) || (!ap && hh > 23)) return [null, "not a real time of day"];
+      if (ap) hh = hh % 12 + (ap === "pm" ? 12 : 0);
+      return [dp[0] + " " + String(hh).padStart(2, "0") + ":" + String(mi).padStart(2, "0") + (se ? ":" + se : ""), dp[1]];
+    }
     if ((m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2}|\d{4})$/.exec(v))) {
       var a = +m[1], b = +m[2], y2 = year(m[3]), kind;
       if (a > 12 && b <= 12) kind = "dmy"; else if (b > 12 && a <= 12) kind = "mdy"; else if (a === b) kind = "dmy"; else kind = order || null;
