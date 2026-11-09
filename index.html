@@ -50,6 +50,7 @@
       <strong>Drop a .csv file here</strong><br><span class="muted">or click to choose one (comma, semicolon, tab or pipe separated; UTF-8 or Windows-1252)</span>
       <input type="file" id="file" accept=".csv,text/csv,.txt" class="hidden">
     </div>
+    <p class="muted" style="margin:10px 0 0">No file at hand? <button class="alt" id="try-sample" type="button">Try it on a sample</button> 12 invented rows with the usual mess; nothing is uploaded.</p>
     <div class="row">
       <label>Country for local phone numbers
         <select id="region"><option value="">Not given (leave local numbers as found)</option><option>AU</option><option>NZ</option><option>UK</option><option>US</option><option>CA</option></select>
@@ -92,7 +93,7 @@
   <ul>
     <li>It reads CSV only (export Excel files as CSV first). A number Excel has already turned into 4.05E+14 cannot be restored. The tool leaves such a cell as found and lists it in issues.csv (scientific_notation) when the exponent is 10 or more, so ask for that column exported as text; shorter forms like 2E+3 are not listed.</li>
     <li>It does not import into Xero, QuickBooks, HubSpot or anything else, and it does not know your business rules.</li>
-    <li>It was tested against synthetic files only (see the test folder in the repository), not against anyone's real data. Check the log before you rely on a file.</li>
+    <li>It was tested against invented files only, never against anyone's real data. Check the log before you rely on a file.</li>
   </ul>
 
   <div class="card" id="paid">
@@ -102,7 +103,7 @@
   </div>
 
   <footer class="muted">
-    <p>Built by Neo Dlamini (South Africa, UTC+2), github.com/autoflowcompliance. Written with AI assistance (Claude Code). The cleaning rules are the same as the Python tool in the same repository, and a test confirms the two give identical output on five test runs.</p>
+    <p>Built by Neo Dlamini (South Africa, UTC+2), github.com/autoflowcompliance. Written with AI assistance (Claude Code). The cleaning rules are a port of a Python tool I run myself, and a test in my own workspace checks that the two give identical output on my test files (that test is not published here).</p>
   </footer>
 </main>
 
@@ -182,6 +183,30 @@
   ["dragenter", "dragover"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("on"); }); });
   ["dragleave", "drop"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("on"); }); });
   drop.addEventListener("drop", function (e) { load(e.dataTransfer.files[0]); });
+  /* Sample file: invented people only (same rows as the author's demo file); no real person or business. */
+  var SAMPLE = [
+    "CustomerName,EmailAddress,Mobile,Created,City",
+    "  Aroha  Smith,AROHA.SMITH@EXAMPLE.COM ,0412 345 678,14/03/2024,Perth",
+    "Ben Carter,ben.carter@example.com,0412345679,03/04/2024,Sydney",
+    "Chloe   Nguyen,chloe.nguyen@example.com,+61 412 345 680,27/05/24,Melbourne",
+    "Dev Patel,dev.patel@example.com,0412 345 681 ext 22,2024-06-30,Brisbane",
+    "Dev Patel,dev.patel@example.com,0412 345 681 ext 22,2024-06-30,Brisbane",
+    "Erin Walsh,erin.walsh(at)example.com,0412345682,31/07/2024,Adelaide",
+    ",,,,",
+    "Farid Khan,Farid.Khan@Example.com,0412 345 683,01/08/2024,Hobart",
+    "Grace Lee,grace.lee@example.com,04 1234 5684,15/09/2024,Darwin",
+    "Hugo Martin,hugo.martin@example.com,0412345685,12/10/2024,\"Canberra",
+    "ACT\"",
+    "Hugo M.,hugo.martin@example.com,0412345685,12/10/2024,Canberra",
+    "Isla Brown,  isla.brown@example.com,(04) 1234 5686,20/11/2024,Perth"
+  ].join("\n");
+  $("try-sample").addEventListener("click", function () {
+    state.name = "sample (invented people)"; state.text = SAMPLE;
+    $("region").value = "AU"; $("order").value = "dmy";
+    run();
+    $("status").textContent += " Country set to AU and date order to day/month for this sample; change them above to see what they do.";
+    $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
   ["region", "order", "key"].forEach(function (id) { $(id).addEventListener("change", run); });
   $("dl-clean").addEventListener("click", function () { if (state.result) download("clean.csv", CSVCleaner.toCSV(state.result.header, state.result.clean)); });
   $("dl-changes").addEventListener("click", function () { if (state.result) download("changes.csv", CSVCleaner.toCSV(["source_row", "column", "action", "old", "new"], state.result.changes)); });
