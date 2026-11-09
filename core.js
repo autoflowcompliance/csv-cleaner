@@ -75,6 +75,7 @@
     var k = parseInt(s, 10);
     return [k <= 69 ? 2000 + k : 1900 + k, "2-digit year: 00-69 read as 20xx"];
   }
+  var NOT_A_DATE = "unrecognised date format; left as found";
   function normDate(v, order) {
     var m;
     if ((m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v))) return make(+m[1], +m[2], +m[3]);
@@ -93,7 +94,7 @@
       if (order && kind !== order && a !== b) return [null, "value only fits " + kind + " but the chosen date order is " + order + "; left as found"];
       return kind === "dmy" ? make(y2[0], b, a, y2[1]) : make(y2[0], a, b, y2[1]);
     }
-    return [null, "unrecognised date format; left as found"];
+    return [null, NOT_A_DATE];
   }
 
   /* Title lines above the real header (rows with at most one filled cell, while at least two rows below are wider) are not data. */
@@ -112,12 +113,19 @@
     var sp = splitPreamble(rows), pre = sp.pre; rows = sp.rows;
     var header = rows[0].map(tidy), n = header.length, pcols = [], dcols = [], ecols = [];
     header.forEach(function (h, i) { if (PHONE_COL.test(h)) pcols.push(i); if (DATE_COL.test(h)) dcols.push(i); if (EMAIL_COL.test(h)) ecols.push(i); });
+    var notread = []; /* header says date, but no cell in the column looks like a date: leave the column alone, say so once */
+    dcols.slice().forEach(function (ci) {
+      var vals = [];
+      for (var q = 1; q < rows.length; q++) { var cv = ci < rows[q].length ? tidy(rows[q][ci]) : ""; if (cv) vals.push(cv); }
+      if (vals.length && !vals.some(function (v) { return normDate(v, opts.dateOrder)[1] !== NOT_A_DATE; })) { dcols.splice(dcols.indexOf(ci), 1); notread.push([ci, vals.length, vals[0]]); }
+    });
     var kcol = opts.key && header.indexOf(opts.key) >= 0 ? header.indexOf(opts.key) : (ecols.length ? ecols[0] : null);
     var changes = [], issues = [], out = [], seen = Object.create(null), bykey = Object.create(null);
     pre.forEach(function (pr, pi) { /* skipped title lines are listed, never dropped silently */
       var vals = pr.map(tidy).filter(Boolean);
       if (vals.length) issues.push([pi + 1, "*", "preamble_row_skipped: above the header, not cleaned", vals.join(" | ")]);
     });
+    notread.forEach(function (nr) { issues.push([1 + pre.length, header[nr[0]], "date_column_not_read: the header looks like a date column but none of its " + nr[1] + " value(s) is in a date format this tool reads (yyyy-mm-dd, dd/mm/yyyy, 5 Mar 2024); column left as found", "first value: " + nr[2]]); });
     for (var r = 1; r < rows.length; r++) {
       var rn = r + 1 + pre.length, extra = rows[r].slice(n).map(tidy).filter(Boolean); /* cells past the header width: never dropped silently */
       if (extra.length) issues.push([rn, "*", "row_longer_than_header: " + extra.length + " extra cell(s) not in clean.csv", extra.join(" | ")]);
