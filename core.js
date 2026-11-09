@@ -80,6 +80,12 @@
   function normDate(v, order) {
     var m;
     if ((m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v))) return make(+m[1], +m[2], +m[3]);
+    if ((m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/.exec(v))) {
+      /* already ISO 8601 with a time: keep it exactly as found when it is real, flag it when it is not */
+      if (+m[4] > 23 || +m[5] > 59 || (m[6] && +m[6] > 59)) return [null, "not a real time of day"];
+      var dd = make(+m[1], +m[2], +m[3]);
+      return dd[0] ? [v, null] : dd;
+    }
     if ((m = /^(\d{4})[\/.](\d{1,2})[\/.](\d{1,2})$/.exec(v))) return make(+m[1], +m[2], +m[3]);
     if ((m = /^(\d{1,2})[ \-]([A-Za-z]{3,9})\.?[ \-,]+(\d{2}|\d{4})$/.exec(v)) && MONTHS[m[2].slice(0, 3).toLowerCase()]) {
       var yn = year(m[3]); return make(yn[0], MONTHS[m[2].slice(0, 3).toLowerCase()], +m[1], yn[1]);
